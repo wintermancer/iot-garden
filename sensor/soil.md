@@ -18,3 +18,8 @@ Fritzing diagram
 ### Specific config
 * Chip is running on 160MHz. When running on 80MHz adjust runtime calculation
 * MCP1700-3302E might be an issue depending on your sensor loadout.  Working fine for me so far. Read paragraph 2 here https://arduinodiy.wordpress.com/2020/01/18/very-deepsleep-and-energy-saving-on-esp8266/
+
+
+
+
+back to main page https://github.com/wintermancer/iot-garden/blob/main/README.md
