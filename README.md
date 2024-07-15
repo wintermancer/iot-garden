@@ -5,8 +5,11 @@ Architecture diagram:
 
 Disclaimer: This project is learning by doing. Be advised that you use all code / ideas / instructions from this repository at your own risk
 
-### Project goals
+## Project goals
 1. Build sensor for long term soil moisture monitoring.
 2. Build weather station for long term weather monitoring.
 4. Build irrigation control to water plants based on soil moisture and weather data.
 5. Integrate with free tier public cloud services for fancy features like automatic calibration.
+
+### Part specific documentation
+* Soil sensor https://github.com/wintermancer/iot-garden/blob/main/sensor/soil.md
