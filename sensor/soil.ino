@@ -5,37 +5,30 @@
 #include <ESP8266HTTPClient.h>
 #include <ESP8266httpUpdate.h>
 #include "secrets.h"
-
+// Globals
 #define POWER_PIN D5
 #define AO_PIN A0
-
+const String SOFTWARE_VERSION = "20240715001";
+const int deviceId = ESP.getChipId();
 // Redis prefix definitions
-#define LOCATION_STRING "location_"
-#define TOPIC_STRING "topic_"
-#define MAX_STRING "maxmoist_"
-#define MIN_STRING "minmoist_"
-#define OTA_VERSION "OTAV_"
-
-const String SOFTWARE_VERSION = "20240707001";
-
-// data structure for saving WiFi information
-// based on https://www.bakke.online/index.php/2017/05/21/reducing-wifi-power-consumption-on-esp8266-part-1/
+const String LOCATION_STRING = "location_";
+const String TOPIC_STRING = "topic_";
+const String MAX_STRING = "maxmoist_";
+const String MIN_STRING = "minmoist_";
+const String OTA_VERSION = "OTAV_";
+// data struct for saving WiFi information
 struct {
   uint32_t crc32;   // 4 bytes
   uint8_t channel;  // 1 byte,   5 in total
   uint8_t bssid[6]; // 6 bytes, 11 in total
   uint8_t padding;  // 1 byte,  12 in total
 } rtcData;
-
-/** define global variables **/
-const int deviceId = ESP.getChipId();
-String redisValue;
-
-/**** WiFi Connectivity Initialisation *****/
-WiFiClient WiFiclient;
-WiFiClient WiFiclient2;
-Redis redis(WiFiclient);
-PubSubClient pubsub(WiFiclient2);
+/// WiFi Connectivity Initialisation 
+WiFiClient RedisWiFi;
+WiFiClient MQTTWiFi;
+WiFiClient OTAWiFi;
+Redis redis(RedisWiFi);
+PubSubClient pubsub(MQTTWiFi);
 
 void setup() {
   Serial.begin(115200);
@@ -58,7 +51,6 @@ uint32_t calculateCRC32( const uint8_t *data, size_t length ) {
       }
     }
   }
-
   return crc;
 }
 
@@ -72,10 +64,8 @@ void connectWiFi() {
       rtcValid = true;
     }
   }
-  // connect wifi
   Serial.print("connecting to: ");
   Serial.println(WLAN_SSID);
-  // wake WiFi from sleep
   WiFi.setOutputPower(11.5);
   WiFi.persistent( false );
   WiFi.forceSleepWake();
@@ -86,7 +76,7 @@ void connectWiFi() {
     WiFi.begin( WLAN_SSID, WLAN_PASSWD, rtcData.channel, rtcData.bssid, true );
   }
   else {
-    // The RTC data was not valid, so make a regular connection
+    // The RTC data was not valid, make a regular connection
     WiFi.begin( WLAN_SSID, WLAN_PASSWD );
   }
   int WLAN_retries = 0;
@@ -103,18 +93,18 @@ void connectWiFi() {
       WiFi.begin( WLAN_SSID, WLAN_PASSWD );
     }
     if( WLAN_retries == 1200 ) {
-      // Giving up after 12 seconds and restart
+      // Giving up after 12 seconds
       WiFi.disconnect( true );
       delay(1);
       WiFi.mode( WIFI_OFF );
       delay(1);
       // Serial.println("WiFi problem. Sleeping for 60s before retry");
       ESP.deepSleepInstant(60e6, WAKE_RF_DISABLED);
-      return;
+      return; // Not expecting this to be called, the previous call will never return.
   }
     delay(10);
   }
-  // Write current connection info back to RTC
+  // Write connection info to RTC
   rtcData.channel = WiFi.channel();
   memcpy( rtcData.bssid, WiFi.BSSID(), 6 ); // Copy 6 bytes of BSSID (AP's MAC address)
   rtcData.crc32 = calculateCRC32( ((uint8_t*)&rtcData) + 4, sizeof( rtcData ) - 4 );
@@ -123,27 +113,24 @@ void connectWiFi() {
 }
 
 void initRedis () {
-  if (!WiFiclient.connect(REDIS_ADDR, REDIS_PORT)) {
+  if (!RedisWiFi.connect(REDIS_ADDR, REDIS_PORT)) {
     // If Redis connection fails, go back to Deep Sleep and try again in 5 minutes
     Serial.println("Redis problem. Sleeping for 60s before retry");
     ESP.deepSleepInstant(60e6, WAKE_RF_DISABLED);
     return;
   }
+  auto connRet = redis.authenticate(REDIS_PASSWORD);
+  if (connRet != RedisSuccess) {
+  Serial.println("Redis auth failed. Sleeping for 60s before retry");
+  ESP.deepSleepInstant(60e6, WAKE_RF_DISABLED);
+  }
 }
 
 String getRedisValue (String redisKey) {
   // get Redis Values
-  auto connRet = redis.authenticate(REDIS_PASSWORD);
-  if (connRet == RedisSuccess) {
-    redisKey.concat(deviceId);
-    String result = redis.get(redisKey.c_str());
-    return result;
-    }
-  else {
-    Serial.println("Redis read failed.");
-    String result = "ReadError";
-    return result;
-  }
+  redisKey.concat(deviceId);
+  String result = redis.get(redisKey.c_str());
+  return result;
 }
 
 void setRedisValue (String redisKey, String redisValue) {
@@ -167,7 +154,7 @@ void initOTA () {
     String updateURL = "/";
     updateURL.concat(deviceId);
     updateURL.concat(otaVersion);
-    t_httpUpdate_return ret = ESPhttpUpdate.update(WiFiclient, OTA_SERVER, OTA_PORT, updateURL);
+    t_httpUpdate_return ret = ESPhttpUpdate.update(OTAWiFi, OTA_SERVER, OTA_PORT, updateURL);
     switch (ret) {
       case HTTP_UPDATE_FAILED: Serial.printf("HTTP_UPDATE_FAILD Error (%d): %s\n", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str()); break;
       case HTTP_UPDATE_NO_UPDATES: Serial.println("HTTP_UPDATE_NO_UPDATES"); break;
@@ -203,13 +190,13 @@ void loop() {
   pinMode(POWER_PIN, OUTPUT);
   digitalWrite(POWER_PIN, HIGH);
   connectWiFi(); // connect WiFi while we wait for sensor to stabilize 
+  // delay(250); // Wait for sensor stabilization
   int sensorValue = analogRead(AO_PIN);
   digitalWrite(POWER_PIN, LOW);
   delay(1);
   initRedis();
   // check for OTA updates
   initOTA();
-  // prepare payload for MQTT
   String topic = getRedisValue(TOPIC_STRING);
   String location = getRedisValue(LOCATION_STRING);
   String maxMoist = getRedisValue(MAX_STRING);
@@ -227,7 +214,6 @@ void loop() {
   pubsub.setServer(MQTT_SERVER, MQTT_PORT);
   if (!pubsub.connected()) reconnect();
   pubsub.loop();
-  // publish message
   publishMessage(topic.c_str(), MQTT_message, true);
   delay(10);
   WiFi.disconnect( true );
