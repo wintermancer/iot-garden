@@ -12,4 +12,4 @@ Disclaimer: This project is learning by doing. Be advised that you use all code 
 5. Integrate with free tier public cloud services for fancy features like automatic calibration.
 
 ### Part specific documentation
-* Soil sensor https://github.com/wintermancer/iot-garden/blob/main/sensor/soil.md
+* Soil sensor https://github.com/wintermancer/iot-garden/blob/main/docs/soil.md
