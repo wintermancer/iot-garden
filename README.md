@@ -6,9 +6,9 @@ Architecture diagram:
 Disclaimer: This project is learning by doing. Be advised that you use all code / ideas / instructions from this repository at your own risk
 
 ## Project goals
-1. Build wireless standalone sensor for long term soil moisture monitoring.
-2. Build wireless standalone weather station for long term weather monitoring.
-4. Build wireless standalone irrigation control to water plants based on soil moisture and weather data.
+1. Build wireless battery powered sensor for long term soil moisture monitoring.
+2. Build wireless battery powered weather station for long term weather monitoring.
+4. Build wireless battery powered irrigation control to water plants based on soil moisture and weather data.
 5. Integrate with free tier public cloud services for fancy features like automatic calibration.
 
 ### Part specific documentation
