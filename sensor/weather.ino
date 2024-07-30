@@ -16,6 +16,7 @@
 #define POWER_PIN_RAIN D5  // The ESP8266 pin that provides the power to the rain sensor
 #define POWER_PIN_TEMP D3  // The ESP8266 pin that provides the power to the BME sensor
 #define AO_PIN    A0  // The ESP8266 pin connected to AO pin of the rain sensor
+#define SLEEPTIME 300e6
 const int deviceId = ESP.getChipId();
 Adafruit_BME280 bme = Adafruit_BME280();
 // Redis prefix definitions
@@ -23,6 +24,8 @@ const String LOCATION_STRING = "location_";
 const String TOPIC_STRING = "topic_";
 const String MAX_STRING = "maxrain_";
 const String MIN_STRING = "minrain_";
+const String ERROR_TOPIC_STRING = "errors";
+const char* ERROR_TOPIC = ERROR_TOPIC_STRING.c_str();
 
 void setup() {
   Serial.begin(115200);
@@ -54,6 +57,21 @@ void loop() {
   delay(1);
   digitalWrite(POWER_PIN_TEMP, LOW);
   delay(1);
+  if (t > 100 ) {
+    // build JSON doc for MQTT sending
+    DynamicJsonDocument doc(1024);
+    doc["deviceId"] = deviceId;
+    doc["sensorValue"] = t;
+    doc["errorText"] = "sensorValue too high";
+    doc["ms"] = ESP.getCycleCount() / 160000;
+    char MQTT_message[128];
+    serializeJson(doc, MQTT_message);
+    initMQTT();
+    publishMessage(ERROR_TOPIC, MQTT_message, true);
+    delay(10);
+    ESP.deepSleepInstant(SLEEPTIME, WAKE_RF_DISABLED);
+    delay(10);
+  }
   String topic = getRedisValue(TOPIC_STRING);
   String location = getRedisValue(LOCATION_STRING);
   String maxRain = getRedisValue(MAX_STRING);
@@ -76,6 +94,6 @@ void loop() {
   delay(10);
   WiFi.disconnect( true );
   delay(1);
-  ESP.deepSleepInstant(300e6, WAKE_RF_DISABLED);
+  ESP.deepSleepInstant(SLEEPTIME, WAKE_RF_DISABLED);
   delay(10);
 }

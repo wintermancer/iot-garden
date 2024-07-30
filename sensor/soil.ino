@@ -9,16 +9,18 @@
 #include "mqtt.h"
 #include "wifi.h"
 #include "OTAupdate.h"
-
 // Globals
 #define POWER_PIN D5
 #define AO_PIN A0
+#define SLEEPTIME 7200e6
 const int deviceId = ESP.getChipId();
 // Redis prefix definitions
 const String LOCATION_STRING = "location_";
 const String TOPIC_STRING = "topic_";
 const String MAX_STRING = "maxmoist_";
 const String MIN_STRING = "minmoist_";
+const String ERROR_TOPIC_STRING = "errors";
+const char* ERROR_TOPIC = ERROR_TOPIC_STRING.c_str();
 
 void setup() {
   Serial.begin(115200);
@@ -33,6 +35,37 @@ void loop() {
   int sensorValue = analogRead(AO_PIN);
   digitalWrite(POWER_PIN, LOW);
   delay(1);
+  // handle out of bound sensorValues 
+  if (sensorValue > 850 ) {
+    // build JSON doc for MQTT sending
+    DynamicJsonDocument doc(1024);
+    doc["deviceId"] = deviceId;
+    doc["sensorValue"] = sensorValue;
+    doc["errorText"] = "sensorValue too high";
+    doc["ms"] = ESP.getCycleCount() / 160000;
+    char MQTT_message[128];
+    serializeJson(doc, MQTT_message);
+    initMQTT();
+    publishMessage(ERROR_TOPIC, MQTT_message, true);
+    delay(10);
+    ESP.deepSleepInstant(SLEEPTIME, WAKE_RF_DISABLED);
+    delay(10);
+  }
+  else if (sensorValue < 275 ) {
+    // build JSON doc for MQTT sending
+    DynamicJsonDocument doc(1024);
+    doc["deviceId"] = deviceId;
+    doc["sensorValue"] = sensorValue;
+    doc["errorText"] = "sensorValue too low";
+    doc["ms"] = ESP.getCycleCount() / 160000;
+    char MQTT_message[128];
+    serializeJson(doc, MQTT_message);
+    initMQTT();
+    publishMessage(ERROR_TOPIC, MQTT_message, true);
+    delay(10);
+    ESP.deepSleepInstant(SLEEPTIME, WAKE_RF_DISABLED);
+    delay(10);
+  }
   initRedis();
   initOTA();
   String topic = getRedisValue(TOPIC_STRING);
@@ -54,6 +87,6 @@ void loop() {
   delay(10);
   WiFi.disconnect( true );
   delay(1);
-  ESP.deepSleepInstant(2700e6, WAKE_RF_DISABLED);
+  ESP.deepSleepInstant(SLEEPTIME, WAKE_RF_DISABLED);
   delay(10);
 }

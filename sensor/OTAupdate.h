@@ -1,5 +1,5 @@
 const String OTA_VERSION = "OTAV_";
-const String SOFTWARE_VERSION = "20240720001";
+const String SOFTWARE_VERSION = "20240730001";
 WiFiClient OTAWiFi;
 void initOTA () {
   String otaVersion = getRedisValue(OTA_VERSION);
