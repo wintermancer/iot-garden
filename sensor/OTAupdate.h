@@ -1,7 +1,5 @@
-const String OTA_VERSION = "OTAV_";
-const String SOFTWARE_VERSION = "20240730001";
 WiFiClient OTAWiFi;
-void initOTA () {
+void initOTA (String OTA_VERSION, String SOFTWARE_VERSION) {
   String otaVersion = getRedisValue(OTA_VERSION);
   if ( SOFTWARE_VERSION != otaVersion ) {
     ESPhttpUpdate.setClientTimeout(2000);
